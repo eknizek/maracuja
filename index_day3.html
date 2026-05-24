@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mini Golf</title>
+  <style>
+    body {
+      background: #2a2a2a;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      color: white;
+    }
+    h1 { margin: 0 0 12px 0; font-weight: 400; letter-spacing: 1px; }
+    canvas {
+      border: 2px solid #555;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      display: block;
+    }
+    .hint { margin-top: 14px; color: #aaa; font-size: 14px; }
+    .clubs { display: flex; gap: 8px; margin-top: 8px; }
+    .clubs button {
+      background: #444;
+      color: white;
+      border: 2px solid #666;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .clubs button:hover { background: #555; }
+    .clubs button.selected {
+      background: #4a8a5a;
+      border-color: #7cd49a;
+    }
+    .dev { margin-top: 10px; }
+    .dev button {
+      background: #553355;
+      color: #ddd;
+      border: 1px dashed #888;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .dev button:hover { background: #664466; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+</head>
+<body>
+  <h1>Mini Golf</h1>
+  <main id="game"></main>
+  <p class="hint">Click and drag from the ball to aim. Release to shoot.</p>
+  <div class="clubs">
+    <button data-club="driver">Driver</button>
+    <button data-club="iron" class="selected">Iron</button>
+    <button data-club="wedge">Wedge</button>
+    <button data-club="putter">Putter</button>
+  </div>
+  <div class="dev">
+    <button id="skip-hole">Skip Hole →</button>
+  </div>
+
+  <script>
+    // --- Holes (each course is a list of holes; add a new course below) ---
+    const HOLES_ORIGINAL = [
+      // Hole #1 — Par 3
+      {
+        par: 3,
+        canvas: { w: 800, h: 500 },
+        tee: { x: 100, y: 400 },
+        teeBox: { x: 100, y: 400, w: 70, h: 45 },
+        cup: { x: 650, y: 130, r: 11 },
+        green: { x: 650, y: 130, r: 70 },
+        fairway: [
+          { x1: 100, y1: 400, x2: 650, y2: 130, width: 155 },
+        ],
+        sand: [
+          { x: 380, y: 230, r: 60 },
+          { x: 660, y: 240, r: 45 },
+        ],
+        water: [
+          { x: 650, y: 40, w: 280, h: 50 },
+        ],
+      },
+      // Hole #2 — Par 4 (dogleg right)
+      {
+        par: 4,
+        canvas: { w: 1200, h: 700 },
+        tee: { x: 100, y: 600 },
+        teeBox: { x: 100, y: 600, w: 70, h: 45 },
+        cup: { x: 1050, y: 150, r: 11 },
+        green: { x: 1050, y: 150, r: 60 },
+        fairway: [
+          { x1: 100, y1: 600, x2: 800, y2: 600, width: 155 },
+          { x1: 750, y1: 600, x2: 1050, y2: 200, width: 150 },
+        ],
+        sand: [
+          { x: 820, y: 500, r: 55 },
+          { x: 1050, y: 250, r: 50 },
+        ],
+        water: [
+          { x: 550, y: 350, w: 400, h: 280 },
+        ],
+      },
+      // Hole #3 — Par 5 (island green, lots of bunkers)
+      {
+        par: 5,
+        canvas: { w: 1400, h: 700 },
+        tee: { x: 100, y: 600 },
+        teeBox: { x: 100, y: 600, w: 70, h: 45 },
+        cup: { x: 1230, y: 200, r: 11 },
+        green: { x: 1230, y: 200, r: 75 },
+        fairway: [
+          { x1: 100, y1: 600, x2: 600, y2: 600, width: 150 },
+          { x1: 550, y1: 600, x2: 900, y2: 350, width: 130 },
+          { x1: 850, y1: 350, x2: 1200, y2: 220, width: 110 },
+        ],
+        sand: [
+          { x: 280, y: 555, r: 40 },
+          { x: 280, y: 660, r: 35 },
+          { x: 470, y: 545, r: 38 },
+          { x: 470, y: 670, r: 42 },
+          { x: 670, y: 420, r: 45 },
+          { x: 820, y: 280, r: 40 },
+          { x: 970, y: 210, r: 35 },
+          { x: 1320, y: 230, r: 38 },
+        ],
+        water: [],
+        wind: { dx: -0.012, dy: 0.010 },
+      },
+      // Hole #4 — Par 4 (zig-zag, narrow fairway, lots of water)
+      {
+        par: 4,
+        canvas: { w: 1200, h: 700 },
+        tee: { x: 100, y: 550 },
+        teeBox: { x: 100, y: 550, w: 70, h: 45 },
+        cup: { x: 1000, y: 200, r: 11 },
+        green: { x: 1000, y: 200, r: 55 },
+        fairway: [
+          { x1: 100, y1: 550, x2: 400, y2: 350, width: 80 },
+          { x1: 350, y1: 350, x2: 650, y2: 550, width: 80 },
+          { x1: 600, y1: 550, x2: 980, y2: 220, width: 80 },
+        ],
+        sand: [],
+        water: [
+          { x: 250,  y: 180, w: 280, h: 200 },
+          { x: 550,  y: 680, w: 250, h: 60  },
+          { x: 850,  y: 80,  w: 220, h: 100 },
+          { x: 1100, y: 350, w: 120, h: 180 },
+          { x: 375,  y: 520, w: 130, h: 182 },
+          { x: 610,  y: 370, w: 130, h: 182 },
+        ],
+      },
+    ];
+
+    // --- Easy Breezy course (beginner-friendly: big greens, no water) ---
+    const HOLES_EASY = [
+      // E1 — Par 3 with HARD wind and a huge water hazard covering ~2/3 of the fairway
+      {
+        par: 3,
+        canvas: { w: 800, h: 500 },
+        tee: { x: 120, y: 400 },
+        teeBox: { x: 120, y: 400, w: 70, h: 45 },
+        cup: { x: 650, y: 150, r: 13 },
+        green: { x: 650, y: 150, r: 90 },
+        fairway: [{ x1: 120, y1: 400, x2: 650, y2: 150, width: 200 }],
+        sand: [],
+        water: [{ x: 385, y: 275, w: 200, h: 140 }],
+        wind: { dx: -0.035, dy: 0.025 },
+      },
+      // E2 — Par 4 dogleg LEFT, small back green, water at the corner-cut
+      {
+        par: 4,
+        canvas: { w: 1200, h: 700 },
+        tee: { x: 1000, y: 600 },
+        teeBox: { x: 1000, y: 600, w: 70, h: 45 },
+        cup: { x: 270, y: 196, r: 13 },
+        green: { x: 300, y: 200, r: 50 },
+        fairway: [
+          { x1: 1000, y1: 600, x2: 1000, y2: 300, width: 150 },
+          { x1: 1000, y1: 300, x2: 300, y2: 200, width: 140 },
+        ],
+        sand: [],
+        water: [{ x: 650, y: 450, w: 350, h: 200 }],
+        wind: { dx: -0.035, dy: 0.025 },
+      },
+      // E3 — Par 4 gentle dogleg, one bunker, no water
+      {
+        par: 4,
+        canvas: { w: 1100, h: 550 },
+        tee: { x: 100, y: 470 },
+        teeBox: { x: 100, y: 470, w: 70, h: 45 },
+        cup: { x: 980, y: 180, r: 13 },
+        green: { x: 980, y: 180, r: 85 },
+        fairway: [
+          { x1: 100, y1: 470, x2: 600, y2: 380, width: 160 },
+          { x1: 550, y1: 380, x2: 980, y2: 200, width: 150 },
+        ],
+        sand: [{ x: 730, y: 280, r: 40 }],
+        water: [],
+        wind: { dx: -0.035, dy: 0.025 },
+      },
+    ];
+
+    const COURSES = [
+      { name: 'The Original', holes: HOLES_ORIGINAL },
+      { name: 'Easy Breezy',  holes: HOLES_EASY     },
+    ];
+
+    // --- Tunable feel ---
+    const FRICTION = 0.985;
+    const ROUGH_FRICTION = 0.955;
+    const SAND_FRICTION = 0.94;
+    const GREEN_PENALTY_FRICTION = 0.92;
+    const STOP_SPEED = 0.1;
+    const SINK_SPEED = 3.0;
+    const MAX_DRAG = 150;
+    const POWER_SCALE = 0.12;
+    const BALL_R = 8;
+    const WIND_THRESHOLD = 1.2;
+
+    const CLUBS = {
+      driver: { name: 'Driver', power: 1.1 },
+      iron:   { name: 'Iron',   power: 1.0 },
+      wedge:  { name: 'Wedge',  power: 0.55 },
+      putter: { name: 'Putter', power: 0.25 },
+    };
+    let currentClub = 'iron';
+
+    // --- Lobby ---
+    const LOBBY_W = 800;
+    const LOBBY_H = 500;
+    const BALL_COLORS = [
+      { name: 'White',  rgb: [255, 255, 255] },
+      { name: 'Red',    rgb: [220, 60, 60]   },
+      { name: 'Blue',   rgb: [80, 140, 230]  },
+      { name: 'Yellow', rgb: [255, 220, 80]  },
+      { name: 'Green',  rgb: [120, 220, 130] },
+      { name: 'Pink',   rgb: [255, 130, 200] },
+      { name: 'Orange', rgb: [255, 150, 60]  },
+      { name: 'Purple', rgb: [180, 120, 230] },
+    ];
+    let ballColor = [255, 255, 255];
+
+    // --- Game state ---
+    let gameState = 'lobby'; // 'lobby' | 'playing'
+    let currentCourseIndex = 0;
+    let currentHoleIndex = 0;
+    let ball;
+    let lastShotPos;
+    let shotClub = null;
+    let strokes = 0;
+    let totalStrokes = 0;
+    let holeScores = []; // strokes per finished hole (null = skipped via dev button)
+    let aiming = false;
+    let won = false;
+
+    function currentCourse() { return COURSES[currentCourseIndex]; }
+    function hole() { return currentCourse().holes[currentHoleIndex]; }
+
+    function setup() {
+      const c = createCanvas(LOBBY_W, LOBBY_H);
+      c.parent('game');
+      resetBall();
+    }
+
+    function resetBall() {
+      const h = hole();
+      ball = { x: h.tee.x, y: h.tee.y, vx: 0, vy: 0 };
+      lastShotPos = { x: h.tee.x, y: h.tee.y };
+    }
+
+    function draw() {
+      if (gameState === 'lobby') {
+        drawLobby();
+        return;
+      }
+      drawHole();
+      updateBall();
+      drawBall();
+      if (aiming && !won) drawAimArrow();
+      drawHud();
+      if (won) drawWinScreen();
+    }
+
+    function drawLobby() {
+      background(95, 145, 70);
+
+      // Title
+      noStroke();
+      fill(255);
+      textAlign(CENTER, TOP);
+      textSize(64);
+      text('Mini Golf', width / 2, 50);
+      textSize(18);
+      fill(230);
+      text('Click and drag the ball to aim. Release to shoot.', width / 2, 130);
+
+      drawLobbyScene();
+
+      const panelX = 460;
+      const panelW = 310;
+
+      // === Course picker panel (top right) ===
+      noStroke();
+      fill(0, 0, 0, 90);
+      rect(panelX, 160, panelW, 85, 12);
+
+      fill(255);
+      textAlign(CENTER, TOP);
+      textSize(18);
+      text('Choose course', panelX + panelW / 2, 170);
+
+      for (let i = 0; i < COURSES.length; i++) {
+        const btn = courseButton(i);
+        const sel = i === currentCourseIndex;
+        const c = COURSES[i];
+        const parTotal = c.holes.reduce((s, h) => s + h.par, 0);
+
+        if (sel) {
+          fill(255, 215, 70, 220);
+          stroke(255, 220, 80);
+          strokeWeight(2);
+        } else {
+          fill(255, 255, 255, 35);
+          stroke(180);
+          strokeWeight(1);
+        }
+        rect(btn.x, btn.y, btn.w, btn.h, 6);
+
+        noStroke();
+        fill(sel ? 30 : 240);
+        textSize(13);
+        textAlign(LEFT, CENTER);
+        text(c.name, btn.x + 10, btn.y + btn.h / 2);
+        textAlign(RIGHT, CENTER);
+        text(`${c.holes.length} holes · par ${parTotal}`, btn.x + btn.w - 10, btn.y + btn.h / 2);
+      }
+
+      // === Ball picker panel (bottom right) ===
+      noStroke();
+      fill(0, 0, 0, 90);
+      rect(panelX, 255, panelW, 115, 12);
+
+      fill(255);
+      textAlign(CENTER, TOP);
+      textSize(18);
+      text('Pick your ball', panelX + panelW / 2, 265);
+
+      // Big preview of selected ball
+      stroke(50);
+      strokeWeight(1);
+      fill(ballColor[0], ballColor[1], ballColor[2]);
+      circle(panelX + 40, 325, 36);
+
+      // Color swatches — 4 per row, 2 rows
+      for (let i = 0; i < BALL_COLORS.length; i++) {
+        const sx = panelX + 100 + (i % 4) * 50;
+        const sy = 305 + Math.floor(i / 4) * 40;
+        const c = BALL_COLORS[i].rgb;
+        const selected =
+          ballColor[0] === c[0] && ballColor[1] === c[1] && ballColor[2] === c[2];
+        if (selected) {
+          noFill();
+          stroke(255, 220, 80);
+          strokeWeight(3);
+          circle(sx, sy, 32);
+        }
+        stroke(50);
+        strokeWeight(1);
+        fill(c[0], c[1], c[2]);
+        circle(sx, sy, 24);
+      }
+
+      // Big yellow PLAY button (bottom right)
+      const btn = lobbyPlayButton();
+      noStroke();
+      fill(255, 215, 60);
+      rect(btn.x, btn.y, btn.w, btn.h, 16);
+      noFill();
+      stroke(190, 150, 20);
+      strokeWeight(4);
+      rect(btn.x, btn.y, btn.w, btn.h, 16);
+      noStroke();
+      fill(50, 35, 0);
+      textAlign(CENTER, CENTER);
+      textSize(40);
+      text('PLAY ▶', btn.x + btn.w / 2, btn.y + btn.h / 2);
+    }
+
+    function lobbyPlayButton() {
+      return { x: 490, y: 395, w: 280, h: 80 };
+    }
+
+    function courseButton(i) {
+      return { x: 460 + 15, y: 195 + i * 25, w: 310 - 30, h: 22 };
+    }
+
+    function drawLobbyScene() {
+      // Ground shadows
+      noStroke();
+      fill(0, 0, 0, 55);
+      ellipse(170, 415, 250, 14); // cart shadow
+      ellipse(345, 433, 36, 6);   // club head shadow
+      ellipse(400, 452, 36, 6);   // ball shadow
+
+      drawCartoonCart();
+      drawCartoonClub();
+      drawCartoonBall();
+    }
+
+    function drawCartoonCart() {
+      // Roof
+      stroke(110, 30, 30);
+      strokeWeight(2);
+      fill(220, 80, 70);
+      rect(75, 264, 150, 14, 4);
+
+      // Roof struts
+      stroke(60);
+      strokeWeight(3);
+      line(90, 278, 90, 298);
+      line(210, 278, 210, 298);
+
+      // Cabin body
+      stroke(60);
+      strokeWeight(2);
+      fill(245, 245, 240);
+      rect(80, 295, 145, 72, 6);
+
+      // Window
+      noStroke();
+      fill(170, 210, 240);
+      rect(92, 305, 120, 44, 4);
+      // Window divider
+      stroke(60);
+      strokeWeight(2);
+      line(152, 305, 152, 349);
+
+      // Seat back inside
+      noStroke();
+      fill(120, 80, 50);
+      rect(92, 350, 120, 12, 3);
+
+      // Cargo deck (extends to the right)
+      stroke(60);
+      strokeWeight(2);
+      fill(220, 80, 70);
+      rect(220, 330, 55, 37, 4);
+
+      // Golf bag on cargo
+      noStroke();
+      fill(40, 80, 160);
+      rect(232, 290, 28, 50, 6);
+      stroke(20);
+      strokeWeight(1.5);
+      noFill();
+      arc(246, 300, 22, 20, PI, TWO_PI);
+
+      // Clubs sticking out of the bag
+      stroke(160);
+      strokeWeight(2.5);
+      line(237, 292, 232, 258);
+      line(246, 292, 248, 252);
+      line(255, 292, 262, 260);
+      noStroke();
+      fill(220, 80, 70);   ellipse(232, 256, 8, 10);
+      fill(240, 200, 60);  ellipse(248, 250, 8, 10);
+      fill(160, 220, 120); ellipse(262, 258, 8, 10);
+
+      // Front bumper
+      noStroke();
+      fill(80, 80, 80);
+      rect(78, 360, 200, 8, 3);
+
+      // Headlight
+      fill(255, 240, 130);
+      stroke(60); strokeWeight(1.5);
+      circle(82, 340, 12);
+
+      // Wheels
+      noStroke();
+      fill(30);
+      circle(115, 385, 44);
+      circle(235, 385, 44);
+      fill(180);
+      circle(115, 385, 22);
+      circle(235, 385, 22);
+      fill(80);
+      circle(115, 385, 8);
+      circle(235, 385, 8);
+    }
+
+    function drawCartoonClub() {
+      push();
+      translate(345, 425);
+      rotate(0.28);
+
+      // Shaft
+      stroke(190);
+      strokeWeight(4);
+      line(0, 0, 0, -200);
+
+      // Grip
+      noStroke();
+      fill(40);
+      rect(-4, -200, 8, 40, 3);
+      stroke(140);
+      strokeWeight(1);
+      for (let i = 0; i < 4; i++) {
+        line(-4, -192 + i * 8, 4, -192 + i * 8);
+      }
+
+      // Driver head (teardrop)
+      noStroke();
+      fill(50, 50, 65);
+      ellipse(10, -3, 38, 22);
+      // Highlight
+      fill(150, 150, 170);
+      ellipse(4, -8, 18, 6);
+      // Face line
+      stroke(20);
+      strokeWeight(1);
+      line(22, -10, 24, 6);
+
+      pop();
+    }
+
+    function drawCartoonBall() {
+      stroke(80);
+      strokeWeight(1.5);
+      fill(ballColor[0], ballColor[1], ballColor[2]);
+      circle(400, 435, 40);
+
+      // Dimples
+      noStroke();
+      fill(0, 0, 0, 45);
+      circle(394, 428, 3);
+      circle(404, 425, 3);
+      circle(411, 432, 3);
+      circle(396, 438, 3);
+      circle(405, 442, 3);
+      circle(389, 434, 3);
+      circle(412, 444, 3);
+    }
+
+    function lobbyClick(mx, my) {
+      // Course buttons
+      for (let i = 0; i < COURSES.length; i++) {
+        const cb = courseButton(i);
+        if (mx >= cb.x && mx <= cb.x + cb.w && my >= cb.y && my <= cb.y + cb.h) {
+          currentCourseIndex = i;
+          return;
+        }
+      }
+      // Swatches
+      for (let i = 0; i < BALL_COLORS.length; i++) {
+        const sx = 460 + 100 + (i % 4) * 50;
+        const sy = 305 + Math.floor(i / 4) * 40;
+        if (dist(mx, my, sx, sy) < 16) {
+          ballColor = BALL_COLORS[i].rgb.slice();
+          return;
+        }
+      }
+      // Play button
+      const btn = lobbyPlayButton();
+      if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
+        startGame();
+      }
+    }
+
+    function startGame() {
+      gameState = 'playing';
+      currentHoleIndex = 0;
+      strokes = 0;
+      totalStrokes = 0;
+      holeScores = [];
+      won = false;
+      resizeCanvas(hole().canvas.w, hole().canvas.h);
+      resetBall();
+    }
+
+    function drawHole() {
+      const h = hole();
+      background(95, 145, 70);
+
+      // Fairway segments
+      stroke(155, 210, 110);
+      strokeCap(ROUND);
+      for (const seg of h.fairway) {
+        strokeWeight(seg.width);
+        line(seg.x1, seg.y1, seg.x2, seg.y2);
+      }
+
+      noStroke();
+      fill(110, 170, 80);
+      rect(h.teeBox.x - h.teeBox.w / 2, h.teeBox.y - h.teeBox.h / 2, h.teeBox.w, h.teeBox.h, 6);
+
+      // Tee markers (perpendicular to first fairway segment)
+      const firstSeg = h.fairway[0];
+      const segDx = firstSeg.x2 - firstSeg.x1;
+      const segDy = firstSeg.y2 - firstSeg.y1;
+      const segLen = Math.hypot(segDx, segDy);
+      const perpX = -segDy / segLen;
+      const perpY = segDx / segLen;
+      const markerOffset = 18;
+      fill(255);
+      circle(h.tee.x + perpX * markerOffset, h.tee.y + perpY * markerOffset, 8);
+      circle(h.tee.x - perpX * markerOffset, h.tee.y - perpY * markerOffset, 8);
+
+      fill(60, 130, 220);
+      for (const w of h.water) {
+        ellipse(w.x, w.y, w.w, w.h);
+      }
+
+      fill(230, 210, 150);
+      for (const s of h.sand) {
+        circle(s.x, s.y, s.r * 2);
+      }
+
+      fill(80, 160, 70);
+      circle(h.green.x, h.green.y, h.green.r * 2);
+
+      fill(20);
+      circle(h.cup.x, h.cup.y, h.cup.r * 2);
+
+      drawFlag();
+    }
+
+    function drawFlag() {
+      const h = hole();
+      const px = h.cup.x;
+      const pyTop = h.cup.y - 42;
+
+      stroke(120, 80, 40);
+      strokeWeight(2);
+      line(px, h.cup.y, px, pyTop);
+
+      noStroke();
+      fill(220, 60, 60);
+      if (h.wind) {
+        const mag = Math.hypot(h.wind.dx, h.wind.dy);
+        const ux = h.wind.dx / mag;
+        const uy = h.wind.dy / mag;
+        const flagLen = 22;
+        const wave = Math.sin(frameCount * 0.15) * 3;
+        const waveX = -uy * wave;
+        const waveY = ux * wave;
+        triangle(
+          px, pyTop,
+          px + ux * flagLen + waveX, pyTop + uy * flagLen + waveY,
+          px, pyTop + 9
+        );
+      } else {
+        triangle(px, pyTop, px + 14, pyTop + 5, px, pyTop + 9);
+      }
+    }
+
+    function updateBall() {
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      if (ball.x <= BALL_R || ball.x >= width - BALL_R ||
+          ball.y <= BALL_R || ball.y >= height - BALL_R) {
+        // Out of bounds — return to last shot position, no penalty
+        ball.x = lastShotPos.x;
+        ball.y = lastShotPos.y;
+        ball.vx = 0;
+        ball.vy = 0;
+        return;
+      }
+
+      const f = inSand() ? SAND_FRICTION
+              : inGreen() ? ((shotClub && shotClub !== 'putter') ? GREEN_PENALTY_FRICTION : FRICTION)
+              : inFairway() ? FRICTION
+              : ROUGH_FRICTION;
+      ball.vx *= f;
+      ball.vy *= f;
+
+      const speed = Math.hypot(ball.vx, ball.vy);
+      if (speed < STOP_SPEED) {
+        ball.vx = 0;
+        ball.vy = 0;
+        shotClub = null;
+      } else if (hole().wind && speed >= WIND_THRESHOLD) {
+        ball.vx += hole().wind.dx;
+        ball.vy += hole().wind.dy;
+      }
+
+      if (!won && inWater()) {
+        ball.x = lastShotPos.x;
+        ball.y = lastShotPos.y;
+        ball.vx = 0;
+        ball.vy = 0;
+        return;
+      }
+
+      const cup = hole().cup;
+      if (!won && dist(ball.x, ball.y, cup.x, cup.y) < cup.r && speed < SINK_SPEED) {
+        won = true;
+        ball.x = cup.x;
+        ball.y = cup.y;
+        ball.vx = 0;
+        ball.vy = 0;
+      }
+    }
+
+    function drawBall() {
+      stroke(50);
+      strokeWeight(1);
+      fill(ballColor[0], ballColor[1], ballColor[2]);
+      circle(ball.x, ball.y, BALL_R * 2);
+    }
+
+    function drawAimArrow() {
+      const dx = ball.x - mouseX;
+      const dy = ball.y - mouseY;
+      const dragLen = Math.min(Math.hypot(dx, dy), MAX_DRAG);
+      if (dragLen < 5) return;
+      const angle = Math.atan2(dy, dx);
+      const ex = ball.x + Math.cos(angle) * dragLen;
+      const ey = ball.y + Math.sin(angle) * dragLen;
+
+      stroke(220, 40, 40);
+      strokeWeight(3);
+      line(ball.x, ball.y, ex, ey);
+
+      const headLen = 10;
+      const left = angle + Math.PI - 0.4;
+      const right = angle + Math.PI + 0.4;
+      line(ex, ey, ex + Math.cos(left) * headLen, ey + Math.sin(left) * headLen);
+      line(ex, ey, ex + Math.cos(right) * headLen, ey + Math.sin(right) * headLen);
+    }
+
+    function drawHud() {
+      noStroke();
+      fill(255);
+      textSize(18);
+      textAlign(LEFT, TOP);
+      text(`Hole #${currentHoleIndex + 1}`, 14, 12);
+      text(`Par: ${hole().par}`, 14, 34);
+      text(`Strokes: ${strokes}`, 14, 56);
+      text(`Club: ${CLUBS[currentClub].name}`, 14, 78);
+      drawScorecard();
+      drawWindIndicator();
+    }
+
+    function drawScorecard() {
+      const x0 = 14;
+      const y0 = 112;
+      const colW = 28;
+      const labelW = 52;
+      const rowH = 20;
+
+      textSize(13);
+      textAlign(LEFT, TOP);
+      noStroke();
+      fill(200);
+      text('Hole', x0, y0);
+      text('Score', x0, y0 + rowH);
+      text('vs Par', x0, y0 + rowH * 2);
+
+      textAlign(CENTER, TOP);
+      const holes = currentCourse().holes;
+      for (let i = 0; i < holes.length; i++) {
+        const cx = x0 + labelW + i * colW;
+
+        if (i === currentHoleIndex && !won) {
+          noFill();
+          stroke(255, 220, 80);
+          strokeWeight(1.5);
+          rect(cx - colW / 2 + 4, y0 - 3, colW - 8, rowH * 3 - 1, 3);
+          noStroke();
+        }
+
+        fill(200);
+        text(i + 1, cx, y0);
+
+        let scoreStr;
+        let diffStr = '·';
+        let diffColor = [200, 200, 200];
+
+        if (i < holeScores.length) {
+          if (holeScores[i] === null) {
+            scoreStr = '–';
+            diffStr = '–';
+          } else {
+            scoreStr = String(holeScores[i]);
+            const diff = holeScores[i] - holes[i].par;
+            if (diff < 0) {
+              diffStr = String(diff);
+              diffColor = [120, 230, 130];
+            } else if (diff === 0) {
+              diffStr = 'E';
+              diffColor = [220, 220, 220];
+            } else {
+              diffStr = '+' + diff;
+              diffColor = [255, 130, 130];
+            }
+          }
+        } else if (i === currentHoleIndex) {
+          scoreStr = String(strokes);
+        } else {
+          scoreStr = '·';
+        }
+
+        fill(255);
+        text(scoreStr, cx, y0 + rowH);
+        fill(diffColor[0], diffColor[1], diffColor[2]);
+        text(diffStr, cx, y0 + rowH * 2);
+      }
+
+      textAlign(LEFT, TOP);
+      fill(220);
+      text(`Total: ${totalStrokes + strokes}`, x0, y0 + rowH * 3 + 6);
+    }
+
+    function drawWindIndicator() {
+      const w = hole().wind;
+      if (!w) return;
+      noStroke();
+      fill(255);
+      textSize(14);
+      textAlign(RIGHT, TOP);
+      text('Wind', width - 14, 12);
+      const cx = width - 50;
+      const cy = 44;
+      const angle = Math.atan2(w.dy, w.dx);
+      const len = 22;
+      const ex = cx + Math.cos(angle) * len;
+      const ey = cy + Math.sin(angle) * len;
+      stroke(180, 220, 255);
+      strokeWeight(3);
+      line(cx, cy, ex, ey);
+      const lAng = angle + Math.PI - 0.4;
+      const rAng = angle + Math.PI + 0.4;
+      line(ex, ey, ex + Math.cos(lAng) * 7, ey + Math.sin(lAng) * 7);
+      line(ex, ey, ex + Math.cos(rAng) * 7, ey + Math.sin(rAng) * 7);
+    }
+
+    function drawWinScreen() {
+      fill(0, 0, 0, 170);
+      rect(0, 0, width, height);
+
+      if (strokes === 1) drawFireworks();
+
+      fill(255);
+      textAlign(CENTER, CENTER);
+
+      const isLastHole = currentHoleIndex >= currentCourse().holes.length - 1;
+      const label = scoreLabel(strokes, hole().par);
+
+      if (isLastHole) {
+        const total = totalStrokes + strokes;
+        textSize(48);
+        text(label, width / 2, height / 2 - 80);
+        textSize(28);
+        text('Round complete!', width / 2, height / 2 - 30);
+        textSize(22);
+        text(`Hole #${currentHoleIndex + 1}: ${strokes} stroke${strokes === 1 ? '' : 's'}`, width / 2, height / 2 + 10);
+        text(`Total: ${total} stroke${total === 1 ? '' : 's'}`, width / 2, height / 2 + 40);
+        textSize(16);
+        text('Click anywhere to play again', width / 2, height / 2 + 80);
+      } else {
+        textSize(48);
+        text(label, width / 2, height / 2 - 50);
+        textSize(22);
+        text(`Hole #${currentHoleIndex + 1} in ${strokes} stroke${strokes === 1 ? '' : 's'}`, width / 2, height / 2 + 10);
+        textSize(16);
+        text('Click anywhere for the next hole', width / 2, height / 2 + 50);
+      }
+    }
+
+    function drawFireworks() {
+      const bursts = [
+        { x: width * 0.20, y: height * 0.30 },
+        { x: width * 0.50, y: height * 0.18 },
+        { x: width * 0.80, y: height * 0.30 },
+        { x: width * 0.30, y: height * 0.65 },
+        { x: width * 0.70, y: height * 0.65 },
+      ];
+      const colors = [
+        [255, 100, 100],
+        [255, 220, 80],
+        [120, 200, 255],
+        [220, 130, 255],
+        [120, 255, 160],
+      ];
+      const cycle = 90;
+      const sparks = 14;
+      noStroke();
+      for (let b = 0; b < bursts.length; b++) {
+        const burst = bursts[b];
+        const phase = ((frameCount + b * 18) % cycle) / cycle;
+        const radius = phase * 140;
+        const alpha = (1 - phase) * 255;
+        const c = colors[b % colors.length];
+        fill(c[0], c[1], c[2], alpha);
+        for (let i = 0; i < sparks; i++) {
+          const angle = (i / sparks) * TWO_PI;
+          const x = burst.x + Math.cos(angle) * radius;
+          const y = burst.y + Math.sin(angle) * radius;
+          circle(x, y, 6);
+        }
+      }
+    }
+
+    function scoreLabel(strokes, par) {
+      if (strokes === 1) return 'Hole in One!';
+      const diff = strokes - par;
+      if (diff <= -3) return 'Albatross!';
+      if (diff === -2) return 'Eagle!';
+      if (diff === -1) return 'Birdie! 🎉';
+      if (diff === 0) return 'Par 😊';
+      if (diff === 1) return 'Bogey 😢';
+      if (diff === 2) return 'Double Bogey 😢';
+      if (diff === 3) return 'Triple Bogey 😢';
+      return `+${diff} 😢`;
+    }
+
+    function isStopped() {
+      return ball.vx === 0 && ball.vy === 0;
+    }
+
+    function inSand() {
+      return hole().sand.some(s => dist(ball.x, ball.y, s.x, s.y) < s.r);
+    }
+
+    function inWater() {
+      return hole().water.some(w => {
+        const dx = (ball.x - w.x) / (w.w / 2);
+        const dy = (ball.y - w.y) / (w.h / 2);
+        return dx * dx + dy * dy < 1;
+      });
+    }
+
+    function inGreen() {
+      const g = hole().green;
+      return dist(ball.x, ball.y, g.x, g.y) < g.r;
+    }
+
+    function inFairway() {
+      return hole().fairway.some(seg => {
+        const dx = seg.x2 - seg.x1;
+        const dy = seg.y2 - seg.y1;
+        const lenSq = dx * dx + dy * dy;
+        let t = ((ball.x - seg.x1) * dx + (ball.y - seg.y1) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const projX = seg.x1 + t * dx;
+        const projY = seg.y1 + t * dy;
+        return dist(ball.x, ball.y, projX, projY) < seg.width / 2;
+      });
+    }
+
+    function mousePressed() {
+      if (gameState === 'lobby') {
+        lobbyClick(mouseX, mouseY);
+        return;
+      }
+      if (won) {
+        advanceOrRestart();
+        return;
+      }
+      if (isStopped() && dist(mouseX, mouseY, ball.x, ball.y) < 40) {
+        aiming = true;
+      }
+    }
+
+    function mouseReleased() {
+      if (!aiming || won) return;
+      aiming = false;
+
+      const dx = ball.x - mouseX;
+      const dy = ball.y - mouseY;
+      const dragLen = Math.min(Math.hypot(dx, dy), MAX_DRAG);
+      if (dragLen < 5) return;
+
+      const angle = Math.atan2(dy, dx);
+      const power = dragLen * POWER_SCALE * CLUBS[currentClub].power;
+      lastShotPos = { x: ball.x, y: ball.y };
+      shotClub = currentClub;
+      ball.vx = Math.cos(angle) * power;
+      ball.vy = Math.sin(angle) * power;
+      strokes++;
+    }
+
+    function advanceOrRestart() {
+      const isLastHole = currentHoleIndex >= currentCourse().holes.length - 1;
+      holeScores.push(strokes);
+      if (isLastHole) {
+        gameState = 'lobby';
+        totalStrokes = 0;
+        holeScores = [];
+        currentHoleIndex = 0;
+        strokes = 0;
+        won = false;
+        resizeCanvas(LOBBY_W, LOBBY_H);
+        resetBall();
+        return;
+      }
+      totalStrokes += strokes;
+      currentHoleIndex++;
+      strokes = 0;
+      won = false;
+      resizeCanvas(hole().canvas.w, hole().canvas.h);
+      resetBall();
+    }
+
+    document.querySelectorAll('.clubs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.clubs button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        currentClub = btn.dataset.club;
+      });
+    });
+
+    document.getElementById('skip-hole').addEventListener('click', () => {
+      if (gameState === 'lobby') return;
+      const isLastHole = currentHoleIndex >= currentCourse().holes.length - 1;
+      holeScores.push(null);
+      if (isLastHole) {
+        totalStrokes = 0;
+        holeScores = [];
+        currentHoleIndex = 0;
+      } else {
+        currentHoleIndex++;
+      }
+      strokes = 0;
+      won = false;
+      resizeCanvas(hole().canvas.w, hole().canvas.h);
+      resetBall();
+    });
+  </script>
+</body>
+</html>
