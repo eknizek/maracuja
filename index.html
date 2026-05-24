@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Mini Golf</title>
   <style>
-    canvas { touch-action: none; }
+    canvas { touch-action: none; max-width: 100%; height: auto; }
     body {
       background: #2a2a2a;
       margin: 0;
@@ -54,6 +54,11 @@
       font-family: inherit;
     }
     .dev button:hover { background: #664466; }
+
+    @media (max-width: 500px) {
+      body { padding: 8px; }
+      .clubs button { padding: 14px 18px; font-size: 16px; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
 </head>
